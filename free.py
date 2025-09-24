@@ -665,17 +665,16 @@ class MessageFormatter:
             status_text = result.status
         
         message = f"""
-## [💳] 𝙲𝚊𝚛𝚍 ↯ {result.card}
-## [{status_emoji}] 𝚂𝚝𝚊𝚝𝚞𝚜 ↯ [ {status_text}]
+↯ [💳] 𝙲𝚊𝚛𝚍 ↯ {result.card}
+↯ [{status_emoji}] 𝚂𝚝𝚊𝚝𝚞𝚜 ↯ [ {status_text}]
 [🎟️] 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 ↯- [{result.message}]
-## [📟] 𝚋𝚒𝚗 ↯ {bin_info.scheme} - {bin_info.type} - {bin_info.brand}
+↯ [📟] 𝚋𝚒𝚗 ↯ {bin_info.scheme} - {bin_info.type} - {bin_info.brand}
 [🏦] 𝚋𝚊𝚗𝚔 ↯ {bin_info.bank}
 [{bin_info.country_emoji}] 𝚌𝚘𝚞𝚗𝚝𝚛𝚢 ↯ {bin_info.country} [{bin_info.country_emoji}]
-## [🤓] 𝙶𝚊𝚝𝚎𝚠𝚊𝚢 ↯ Budget VM Stripe
+↯ [🤓] 𝙶𝚊𝚝𝚎𝚠𝚊𝚢 ↯ Live Auth 🥷↯
 [🕜] 𝚃𝚊𝚔𝚎𝚗 ↯ [ {result.time_taken}s ] || 𝚁𝚎𝚝𝚛𝚢 ↯- 0
-[📡] 𝙿𝚛𝚘𝚡𝚢 ↯- LIVE ✅ (54.xxx.16)
-[❤️]𝙲𝚑𝚎𝚌𝚔𝚎𝚍 𝙱𝚢 ↯ @{bot.get_me().username} [FREE]
-[🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME}
+[❤️]𝙲𝚑𝚎𝚌𝚔𝚎𝚍 𝙱𝚢 ↯ @{bot.get_me().username} [PRO]
+[🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME} - 🥷↯
 """
         return message.strip()
 
@@ -705,9 +704,6 @@ class MessageFormatter:
         progress_bar = "█" * progress_filled + "░" * (10 - progress_filled)
         
         dashboard = f"""
-╭─────────────────────────╮
-│     📊 **DASHBOARD**     │  
-╰─────────────────────────╯
 
 🚀 **Progress:** {progress}/{total_cards} ({percentage:.1f}%)
 ▓{progress_bar}▓ 
@@ -989,25 +985,7 @@ def handle_start(message):
     session_manager.get_results(user_id)
     
     welcome_text = f"""
-╭─────────────────────────╮
-│  🚀 **CARD CHECKER BOT**  │
-╰─────────────────────────╯
-
 👋 Welcome **{username}**!
-
-This is an advanced card testing bot with:
-• 🔥 **Real-time processing**
-• 📊 **Interactive dashboard** 
-• 🌍 **BIN information lookup**
-• 🚀 **Multi-threaded checking**
-• 📱 **Smart response parsing**
-
-🎯 **Features:**
-├ ✅ Live card detection
-├ 📈 Detailed statistics
-├ 💾 Export results  
-├ 🛡️ Error handling
-└ 🚄 High-speed processing
 
 **Owner:** {OWNER_NAME} ({OWNER_USERNAME})
 **Channel:** {OWNER_CHANNEL}
@@ -1202,9 +1180,6 @@ def handle_action_callbacks(call):
             
             bot.answer_callback_query(call.id)
             instruction_text = """
-╭─────────────────────────╮
-│    💳 **SEND CARDS TO CHECK**    │
-╰─────────────────────────╯
 
 **💡 Methods:**
 1️⃣ **Text Message:** Paste cards directly
