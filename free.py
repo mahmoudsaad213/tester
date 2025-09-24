@@ -8,6 +8,8 @@ from datetime import datetime
 import os
 import logging
 import re
+import random
+import string
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple, Any
 import traceback
@@ -139,6 +141,153 @@ class InputValidator:
         
         return cards
 
+class EmailManager:
+    """Manages dynamic email generation and verification"""
+    
+    @staticmethod
+    def generate_random_password(length: int = 12) -> str:
+        characters = string.ascii_letters + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
+
+    @staticmethod
+    def get_mailtm_domains() -> List[str]:
+        try:
+            url = "https://api.mail.tm/domains"
+            headers = {"Accept": "application/json"}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                return [domain["domain"] for domain in response.json() if domain["isActive"]]
+            return ["mail.tm"]
+        except Exception as e:
+            logger.error(f"Error fetching mail.tm domains: {e}")
+            return ["mail.tm"]
+
+    @staticmethod
+    def get_mailtm_token(email: str, password: str) -> Optional[str]:
+        try:
+            create_url = "https://api.mail.tm/accounts"
+            headers = {"Accept": "application/json", "Content-Type": "application/json"}
+            create_data = {"address": email, "password": password}
+            create_response = requests.post(create_url, headers=headers, json=create_data, timeout=10)
+            if create_response.status_code != 201:
+                logger.error(f"Failed to create mail.tm account: {create_response.status_code}")
+                return None
+            token_url = "https://api.mail.tm/token"
+            token_data = {"address": email, "password": password}
+            token_response = requests.post(token_url, headers=headers, json=token_data, timeout=10)
+            if token_response.status_code == 200:
+                return token_response.json().get("token")
+            logger.error(f"Failed to get mail.tm token: {token_response.status_code}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting mail.tm token: {e}")
+            return None
+
+    @staticmethod
+    def get_emails_from_mailtm(email: str, token: str, max_wait_time: int = 60) -> List[Any]:
+        try:
+            url = f"https://api.mail.tm/messages?address={email}"
+            headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+            start_time = time.time()
+            while time.time() - start_time < max_wait_time:
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    emails = response.json()
+                    if emails:
+                        return emails
+                time.sleep(5)
+            return []
+        except Exception as e:
+            logger.error(f"Error getting emails: {e}")
+            return []
+
+    @staticmethod
+    def read_email_content_mailtm(message_id: str, token: str) -> Optional[Dict]:
+        try:
+            url = f"https://api.mail.tm/messages/{message_id}"
+            headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except Exception as e:
+            logger.error(f"Error reading email content: {e}")
+            return None
+
+    @staticmethod
+    def verify_email(verification_url: str) -> bool:
+        try:
+            response = requests.get(verification_url, timeout=10)
+            if response.status_code == 200:
+                logger.info("Verification link opened successfully")
+                return True
+            logger.error(f"Failed to open verification link: {response.status_code}")
+            return False
+        except Exception as e:
+            logger.error(f"Error verifying email: {e}")
+            return False
+
+    @staticmethod
+    def register_and_verify() -> Tuple[Optional[str], Optional[str]]:
+        # Generate email and password
+        domains = EmailManager.get_mailtm_domains()
+        domain = random.choice(domains)
+        prefix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        email = f"{prefix}@{domain}"
+        password = EmailManager.generate_random_password()
+        logger.info(f"Generated email: {email}, password: {password}")
+
+        # Register on budgetvm
+        headers = {
+            'sec-ch-ua-platform': '"Windows"',
+            'Referer': 'https://portal.budgetvm.com/auth/login',
+            'sec-ch-ua': '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
+            'sec-ch-ua-mobile': '?0',
+            'X-Requested-With': 'XMLHttpRequest',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'DNT': '1',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        }
+        data = {
+            'reg_email': email,
+            'reg_password': password,
+            'reg_password2': password,
+            'agree': 'on',
+            'email': email,
+            'password': password,
+            'password2': password,
+        }
+        response = requests.post('https://portal.budgetvm.com/auth/Register', headers=headers, data=data)
+        if response.status_code != 200:
+            logger.error(f"Registration failed: {response.status_code}")
+            return None, None
+
+        # Get mail.tm token
+        token = EmailManager.get_mailtm_token(email, password)
+        if not token:
+            return None, None
+
+        # Check for verification email
+        emails = EmailManager.get_emails_from_mailtm(email, token)
+        if not emails:
+            logger.error("No verification email received")
+            return None, None
+
+        # Read email and extract verification link
+        for email_item in emails:
+            message_id = email_item.get("id")
+            content = EmailManager.read_email_content_mailtm(message_id, token)
+            if content:
+                text = content.get("text", "") or content.get("html", "")
+                match = re.search(r'https://portal\.budgetvm\.com/auth/register/[a-f0-9]+', text)
+                if match:
+                    verification_url = match.group(0)
+                    logger.info(f"Found verification URL: {verification_url}")
+                    if EmailManager.verify_email(verification_url):
+                        return email, password
+        return None, None
+
 class CardChecker:
     """Enhanced card checker with better error handling and retries"""
     
@@ -240,8 +389,8 @@ class CardChecker:
             category="CLASSIC"
         )
 
-    def login_to_portal(self, email: str, password: str) -> bool:
-        """Enhanced login with better error handling"""
+    def login_to_portal(self, email: str = None, password: str = None) -> bool:
+        """Enhanced login with dynamic email generation"""
         with self.login_lock:
             try:
                 if self.logged_in:
@@ -249,6 +398,13 @@ class CardChecker:
                 
                 # Clear session
                 self.session.cookies.clear()
+                
+                # Generate new email if not provided
+                if not email or not password:
+                    email, password = EmailManager.register_and_verify()
+                    if not email or not password:
+                        logger.error("Failed to generate and verify email")
+                        return False
                 
                 login_headers = {
                     'Accept': '*/*',
@@ -421,14 +577,16 @@ class CardChecker:
             
             # Check if logged in
             if not self.logged_in:
-                return CardResult(
-                    card=card_info,
-                    status='Auth Error',
-                    message='Not logged in to portal',
-                    bin_info=bin_info,
-                    time_taken=round(time.time() - start_time, 2),
-                    response='Authentication required'
-                )
+                # Attempt automatic login
+                if not self.login_to_portal():
+                    return CardResult(
+                        card=card_info,
+                        status='Auth Error',
+                        message='Not logged in to portal',
+                        bin_info=bin_info,
+                        time_taken=round(time.time() - start_time, 2),
+                        response='Authentication required'
+                    )
             
             # Create Stripe Token with retries
             token_id = None
@@ -733,7 +891,6 @@ class KeyboardManager:
     def main_menu():
         keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
         keyboard.add(
-            telebot.types.InlineKeyboardButton("🔐 Login", callback_data="action_login"),
             telebot.types.InlineKeyboardButton("💳 Check Cards", callback_data="action_check")
         )
         keyboard.add(
@@ -1009,17 +1166,13 @@ def handle_help(message):
 
 **📝 How to Use:**
 
-**1️⃣ Login:**
-- Click "🔐 Login" button
-- Enter your portal email & password
-- Wait for successful authentication
-
-**2️⃣ Check Cards:**
+**1️⃣ Check Cards:**
 - Click "💳 Check Cards" 
 - Send cards in format: `4100390600114058|11|2026|515`
 - Or upload a .txt file with cards
+- Email authentication is handled automatically
 
-**3️⃣ Monitor Progress:**
+**2️⃣ Monitor Progress:**
 - View live results in dashboard
 - Track approved/declined/errors
 - Stop processing anytime
@@ -1055,11 +1208,6 @@ def handle_text_input(message):
     user_id = message.from_user.id
     session = session_manager.get_session(user_id)
     
-    if not session.get('logged_in'):
-        bot.reply_to(message, "❌ Please login first using the 🔐 Login button!", 
-                    reply_markup=KeyboardManager.main_menu())
-        return
-    
     # Extract cards from text
     cards = InputValidator.extract_cards_from_text(message.text)
     
@@ -1078,6 +1226,20 @@ def handle_text_input(message):
 • CVC: 3-4 digits
 """, parse_mode='Markdown')
         return
+    
+    # Attempt automatic login
+    if not session.get('logged_in'):
+        login_msg = bot.send_message(user_id, "🔄 **Authenticating automatically...**", parse_mode='Markdown')
+        checker = session['checker']
+        if not checker.login_to_portal() or not checker.send_google_ask():
+            bot.edit_message_text("❌ **Automatic authentication failed!** Please try again or contact support.", 
+                                 user_id, login_msg.message_id, parse_mode='Markdown')
+            return
+        session['logged_in'] = True
+        session['email'] = checker.email
+        session['last_activity'] = time.time()
+        bot.edit_message_text(f"✅ **Automatic login successful!** Starting card processing...", 
+                             user_id, login_msg.message_id, parse_mode='Markdown')
     
     # Process cards
     success, message_text = card_processor.process_cards_batch(user_id, cards)
@@ -1102,11 +1264,6 @@ def handle_text_input(message):
 def handle_document(message):
     user_id = message.from_user.id
     session = session_manager.get_session(user_id)
-    
-    if not session.get('logged_in'):
-        bot.reply_to(message, "❌ Please login first using the 🔐 Login button!", 
-                    reply_markup=KeyboardManager.main_menu())
-        return
     
     # Check file type
     if not message.document.file_name.lower().endswith('.txt'):
@@ -1137,6 +1294,20 @@ def handle_document(message):
         
         bot.edit_message_text(f"✅ **Found {len(cards)} valid cards!**", user_id, processing_msg.message_id, parse_mode='Markdown')
         
+        # Attempt automatic login
+        if not session.get('logged_in'):
+            bot.edit_message_text("🔄 **Authenticating automatically...**", user_id, processing_msg.message_id, parse_mode='Markdown')
+            checker = session['checker']
+            if not checker.login_to_portal() or not checker.send_google_ask():
+                bot.edit_message_text("❌ **Automatic authentication failed!** Please try again or contact support.", 
+                                     user_id, processing_msg.message_id, parse_mode='Markdown')
+                return
+            session['logged_in'] = True
+            session['email'] = checker.email
+            session['last_activity'] = time.time()
+            bot.edit_message_text(f"✅ **Automatic login successful!** Starting card processing...", 
+                                 user_id, processing_msg.message_id, parse_mode='Markdown')
+        
         # Process cards
         success, message_text = card_processor.process_cards_batch(user_id, cards)
         
@@ -1162,22 +1333,8 @@ def handle_action_callbacks(call):
     action = call.data.replace('action_', '')
     
     try:
-        if action == 'login':
+        if action == 'check':
             session = session_manager.get_session(user_id)
-            if session.get('logged_in'):
-                bot.answer_callback_query(call.id, "✅ Already logged in!")
-                return
-            
-            bot.answer_callback_query(call.id)
-            msg = bot.send_message(user_id, "📧 **Please enter your email address:**", parse_mode='Markdown')
-            bot.register_next_step_handler(msg, process_email_input)
-            
-        elif action == 'check':
-            session = session_manager.get_session(user_id)
-            if not session.get('logged_in'):
-                bot.answer_callback_query(call.id, "❌ Login required!")
-                return
-            
             bot.answer_callback_query(call.id)
             instruction_text = """
 
@@ -1196,6 +1353,7 @@ def handle_action_callbacks(call):
 • Live results appear instantly
 • Real-time dashboard updates
 • Export approved cards
+• Automatic email authentication
 
 **🚀 Ready to check your cards!**
 """.format(MAX_CARDS_PER_SESSION=MAX_CARDS_PER_SESSION)
@@ -1237,7 +1395,7 @@ def handle_action_callbacks(call):
             bot.send_message(user_id, """
 🆕 **New session started!**
 
-All previous data cleared. Please login again to continue.
+All previous data cleared. Ready to check cards with automatic authentication.
 """, parse_mode='Markdown', reply_markup=KeyboardManager.main_menu())
             
         elif action == 'main_menu':
@@ -1253,90 +1411,6 @@ All previous data cleared. Please login again to continue.
         logger.error(f"Action callback error: {e}")
         bot.answer_callback_query(call.id, "❌ Error occurred!")
 
-def process_email_input(message):
-    user_id = message.from_user.id
-    
-    if not message.text:
-        bot.reply_to(message, "❌ Please send text only!")
-        return
-    
-    email = message.text.strip()
-    
-    # Basic email validation
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-    if not re.match(email_pattern, email):
-        bot.reply_to(message, "❌ **Invalid email format!**\n\nPlease enter a valid email address.", parse_mode='Markdown')
-        return
-    
-    session = session_manager.get_session(user_id)
-    session['temp_email'] = email
-    
-    msg = bot.send_message(user_id, f"✅ **Email:** `{email}`\n\n🔑 **Now enter your password:**", parse_mode='Markdown')
-    bot.register_next_step_handler(msg, process_password_input)
-
-def process_password_input(message):
-    user_id = message.from_user.id
-    
-    if not message.text:
-        bot.reply_to(message, "❌ Please send text only!")
-        return
-    
-    password = message.text.strip()
-    session = session_manager.get_session(user_id)
-    email = session.get('temp_email')
-    
-    if not email:
-        bot.reply_to(message, "❌ Session expired. Please start login again.")
-        return
-    
-    # Delete password message for security
-    try:
-        bot.delete_message(message.chat.id, message.message_id)
-    except:
-        pass
-    
-    # Show login progress
-    login_msg = bot.send_message(user_id, "🔄 **Authenticating...**\n\n⏳ Please wait...", parse_mode='Markdown')
-    
-    # Attempt login
-    checker = session['checker']
-    
-    try:
-        if checker.login_to_portal(email, password):
-            bot.edit_message_text("✅ **Portal login successful!**\n\n🔄 **Sending verification...**", 
-                                 user_id, login_msg.message_id, parse_mode='Markdown')
-            
-            if checker.send_google_ask():
-                session['logged_in'] = True
-                session['email'] = email
-                session['last_activity'] = time.time()
-                
-                bot.edit_message_text(f"""
-✅ **Login Successful!**
-
-📧 **Email:** `{email}`
-🕐 **Time:** {datetime.now().strftime('%H:%M:%S')}
-🔐 **Status:** Authenticated
-
-You can now check cards! 🚀
-""", user_id, login_msg.message_id, parse_mode='Markdown', 
-                                     reply_markup=KeyboardManager.main_menu())
-            else:
-                bot.edit_message_text("❌ **Verification failed!**\n\nGoogle authentication unsuccessful.", 
-                                     user_id, login_msg.message_id, parse_mode='Markdown')
-        else:
-            bot.edit_message_text("❌ **Login failed!**\n\nInvalid email or password.", 
-                                 user_id, login_msg.message_id, parse_mode='Markdown')
-    
-    except Exception as e:
-        logger.error(f"Login error for user {user_id}: {e}")
-        bot.edit_message_text(f"❌ **Login error!**\n\n`{str(e)}`", 
-                             user_id, login_msg.message_id, parse_mode='Markdown')
-    
-    # Clean up temp data
-    session.pop('temp_email', None)
-
-# Dashboard and results callbacks
 @bot.callback_query_handler(func=lambda call: 'show_' in call.data or 'export_' in call.data or 
                                               'refresh_' in call.data or 'stop_' in call.data or
                                               'back_dashboard' in call.data)
