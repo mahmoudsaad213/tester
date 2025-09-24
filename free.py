@@ -644,30 +644,31 @@ class SessionManager:
 # Initialize managers
 session_manager = SessionManager()
 bot = telebot.TeleBot(BOT_TOKEN)
+
 class MessageFormatter:
     """Enhanced message formatting"""
     
-    @staticmethod
-    def format_card_result(result: CardResult, user_id: int) -> str:
-        """Format card result to match the desired style"""
-        bin_info = result.bin_info
-        
-        # Status emoji and text
-        if result.status == 'Approved':
-            status_emoji = "✅"
-            status_text = "Live"
-        elif result.status == 'Declined':
-            status_emoji = "❌"
-            status_text = "Declined"
-        else:
-            status_emoji = "⚠️"
-            status_text = result.status
-        
-        message = f"""
+@staticmethod
+def format_card_result(result: CardResult, user_id: int) -> str:
+    """Format card result to match the specified style"""
+    bin_info = result.bin_info
+    
+    # Status emoji and text
+    if result.status == 'Approved':
+        status_emoji = "✅"
+        status_text = "Live"
+    elif result.status == 'Declined':
+        status_emoji = "❌"
+        status_text = "Declined"
+    else:
+        status_emoji = "⚠️"
+        status_text = result.status
+    
+    message = f"""
 [💳] 𝙲𝚊𝚛𝚍 ↯ {result.card}
 -----------------------------
-[{status_emoji}] 𝚂𝚝𝚊𝚝𝚞𝚜 ↯ [{status_text}]
-[🎟️] 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 ↯- [{result.message}]
+[{status_emoji}] 𝚂𝚝𝚊𝚝𝚞𝚜 ↯ [ {status_text}]
+[🎟️] 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 ↯- [ {result.message}]
 -----------------------------
 [📟] 𝚋𝚒𝚗 ↯ {bin_info.scheme} - {bin_info.type} - {bin_info.brand}
 [🏦] 𝚋𝚊𝚗𝚔 ↯ {bin_info.bank}
@@ -680,56 +681,8 @@ class MessageFormatter:
 [❤️]𝙲𝚑𝚎𝚌𝚔𝚎𝚍 𝙱𝚢 ↯ @{bot.get_me().username} [FREE]
 [🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME}
 """
-        return message.strip()
-    
-    @staticmethod
-    def format_dashboard(user_id: int, total_cards: int = 0) -> str:
-        """Format dashboard with enhanced statistics"""
-        results = session_manager.get_results(user_id)
-        session = session_manager.get_session(user_id)
-        
-        # Calculate progress
-        progress = results['total']
-        percentage = (progress / total_cards * 100) if total_cards > 0 else 0
-        
-        # Calculate rates
-        success_rate = (results['approved'] / results['total'] * 100) if results['total'] > 0 else 0
-        
-        # Time calculations
-        elapsed_time = 0
-        if results.get('start_time'):
-            elapsed_time = time.time() - results['start_time']
-        
-        cards_per_minute = (results['total'] / (elapsed_time / 60)) if elapsed_time > 0 else 0
-        
-        # Progress bar
-        progress_filled = int(percentage / 10)
-        progress_bar = "█" * progress_filled + "░" * (10 - progress_filled)
-        
-        dashboard = f"""
-╭─────────────────────────╮
-│     📊 **DASHBOARD**     │  
-╰─────────────────────────╯
-
-🚀 **Progress:** {progress}/{total_cards} ({percentage:.1f}%)
-▓{progress_bar}▓ 
-
-📈 **Statistics:**
-├ 💳 **Total Checked:** {results['total']}
-├ ✅ **Approved:** {results['approved']} ({success_rate:.1f}%)
-├ ❌ **Declined:** {results['declined']}
-├ ⚠️ **Errors:** {results['errors']}
-└ 📊 **Success Rate:** {success_rate:.1f}%
-
-⚡ **Performance:**
-├ ⏱️ **Time Elapsed:** {int(elapsed_time)}s
-├ 🚄 **Speed:** {cards_per_minute:.1f} cards/min
-└ 🔄 **Status:** {'🟢 Active' if user_id in session_manager.threads and session_manager.threads[user_id].is_alive() else '⚪ Idle'}
-
-📧 **Session Info:**
-└ 🔐 **Account:** {session.get('email', 'Not logged in')}
-"""
-        return dashboard.strip()@staticmethod
+    return message.strip()
+@staticmethod
 def format_dashboard(user_id: int, total_cards: int = 0) -> str:
     """Format dashboard with enhanced statistics"""
     results = session_manager.get_results(user_id)
@@ -1038,16 +991,29 @@ def handle_start(message):
     session_manager.get_results(user_id)
     
     welcome_text = f"""
+╭─────────────────────────╮
+│  🚀 **CARD CHECKER BOT**  │
+╰─────────────────────────╯
 
 👋 Welcome **{username}**!
-╭─────────────────────────╮
+
+This is an advanced card testing bot with:
+• 🔥 **Real-time processing**
+• 📊 **Interactive dashboard** 
+• 🌍 **BIN information lookup**
+• 🚀 **Multi-threaded checking**
+• 📱 **Smart response parsing**
+
+🎯 **Features:**
 ├ ✅ Live card detection
 ├ 📈 Detailed statistics
 ├ 💾 Export results  
 ├ 🛡️ Error handling
 └ 🚄 High-speed processing
+
 **Owner:** {OWNER_NAME} ({OWNER_USERNAME})
 **Channel:** {OWNER_CHANNEL}
+
 Click buttons below to get started! 👇
 """
     
