@@ -647,7 +647,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 class MessageFormatter:
     """Enhanced message formatting"""
-    
+
 @staticmethod
 def format_card_result(result: CardResult, user_id: int) -> str:
     """Format card result to match the specified style"""
@@ -731,7 +731,6 @@ def format_dashboard(user_id: int, total_cards: int = 0) -> str:
 """
     
     return dashboard.strip()
-
 class KeyboardManager:
     """Enhanced keyboard management"""
     
@@ -1132,18 +1131,15 @@ def handle_document(message):
                     reply_markup=KeyboardManager.main_menu())
         return
     
-    # Check file type
     if not message.document.file_name.lower().endswith('.txt'):
         bot.reply_to(message, "❌ Please upload only .txt files!")
         return
     
-    # Check file size (max 10MB)
     if message.document.file_size > 10 * 1024 * 1024:
         bot.reply_to(message, "❌ File too large! Maximum 10MB allowed.")
         return
     
     try:
-        # Download and process file
         processing_msg = bot.reply_to(message, "📥 **Downloading file...**", parse_mode='Markdown')
         
         file_info = bot.get_file(message.document.file_id)
@@ -1151,7 +1147,6 @@ def handle_document(message):
         
         bot.edit_message_text("🔍 **Extracting cards...**", user_id, processing_msg.message_id, parse_mode='Markdown')
         
-        # Extract cards
         file_content = downloaded_file.decode('utf-8', errors='ignore')
         cards = InputValidator.extract_cards_from_text(file_content)
         
@@ -1161,11 +1156,13 @@ def handle_document(message):
         
         bot.edit_message_text(f"✅ **Found {len(cards)} valid cards!**", user_id, processing_msg.message_id, parse_mode='Markdown')
         
+        # Debug: Check if format_dashboard exists
+        logger.info(f"MessageFormatter methods: {dir(MessageFormatter)}")
+        
         # Process cards
         success, message_text = card_processor.process_cards_batch(user_id, cards)
         
         if success:
-            # Send dashboard
             dashboard_text = MessageFormatter.format_dashboard(user_id, len(cards))
             dashboard_msg = bot.send_message(user_id, dashboard_text, 
                                            parse_mode='Markdown',
@@ -1177,7 +1174,6 @@ def handle_document(message):
     except Exception as e:
         logger.error(f"File processing error: {e}")
         bot.reply_to(message, f"❌ **File processing error:** {str(e)}")
-
 # ============= Callback Handlers =============
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('action_'))
