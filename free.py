@@ -685,17 +685,9 @@ class MessageFormatter:
 ├ {bin_info.country_emoji} **Country:** {bin_info.country}
 └ 📋 **Category:** {bin_info.category}
 
-┌─ ⚡ **Transaction Details** ─┐
-├ 🔧 **Gateway:** Budget VM Stripe
-├ ⏱️ **Time:** {result.time_taken}s
-├ 🔄 **Retries:** 0
-├ 📡 **Proxy:** Live ✅
-└ 🎯 **Response:** {result.gateway_response}
-
 ╭─────────────────────────╮
 │ ⚡ **Checked by:** @{bot.get_me().username}
 │ 👑 **Owner:** {OWNER_NAME}
-│ 📢 **Channel:** {OWNER_CHANNEL}
 ╰─────────────────────────╯
 """
         return message.strip()
