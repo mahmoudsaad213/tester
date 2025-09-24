@@ -6,10 +6,14 @@ import time
 import threading
 from datetime import datetime
 import getpass
+import os
 
 # ============= Bot Configuration =============
 BOT_TOKEN = "8418366610:AAHZD1yfFwmh7IpOMuqG9Bsi9qhWxrMhV4E"  # ضع توكن البوت هنا
 ADMIN_ID = 5895491379  # ضع الـ Chat ID الخاص بك هنا
+OWNER_NAME = "Mahmoud Saad"
+OWNER_USERNAME = "@Moud202212"
+OWNER_CHANNEL = "https://t.me/FastSpeedtest"
 
 # ============================================
 
@@ -18,6 +22,8 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # Global variables for dashboard
 user_sessions = {}
 card_results = {}
+checking_threads = {}
+stop_flags = {}
 
 class CardChecker:
     def __init__(self):
@@ -357,13 +363,28 @@ def format_card_result(result, user_id):
 -----------------------------
 [🤓] 𝙶𝚊𝚝𝚎𝚠𝚊𝚢 ↯ B3 AUTH
 [🕜] 𝚃𝚊𝚔𝚎𝚗 ↯ [ {result.get('time_taken', 0)}s ] || 𝚁𝚎𝚝𝚛𝚢 ↯- 0
-[📡] 𝙿𝚛𝚘𝚡𝚸 ↯- LIVE ✅ (54.xxx.16)
+[📡] 𝙿𝚛𝚘𝚡𝚢 ↯- LIVE ✅ (54.xxx.16)
 -----------------------------
 [❤️]𝙲𝚑𝚎𝚌𝚔𝚎𝚍 𝙱𝚢 ↯ @{bot.get_me().username} [FREE]
-[🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - RAVEN
+[🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME}
 """
     
     return message.strip()
+
+def create_main_keyboard():
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(
+        telebot.types.InlineKeyboardButton("📝 Login", callback_data="main_login"),
+        telebot.types.InlineKeyboardButton("🔍 Check Cards", callback_data="main_check")
+    )
+    keyboard.row(
+        telebot.types.InlineKeyboardButton("📊 Dashboard", callback_data="main_dashboard"),
+        telebot.types.InlineKeyboardButton("🆘 Help", callback_data="main_help")
+    )
+    keyboard.row(
+        telebot.types.InlineKeyboardButton("🆕 New Session", callback_data="new_session")
+    )
+    return keyboard
 
 def create_dashboard_keyboard(user_id):
     """Create dashboard keyboard"""
@@ -392,7 +413,12 @@ def create_dashboard_keyboard(user_id):
     
     keyboard.row(
         telebot.types.InlineKeyboardButton("🔄 Refresh", callback_data=f"refresh_dashboard_{user_id}"),
-        telebot.types.InlineKeyboardButton("🆕 New Session", callback_data=f"new_session_{user_id}")
+        telebot.types.InlineKeyboardButton("🛑 Stop Checking", callback_data=f"stop_checking_{user_id}")
+    )
+    
+    keyboard.row(
+        telebot.types.InlineKeyboardButton("📄 Download Live Cards", callback_data=f"download_live_{user_id}"),
+        telebot.types.InlineKeyboardButton("🔙 Back", callback_data="main_back")
     )
     
     return keyboard
@@ -407,19 +433,14 @@ def create_back_keyboard(user_id):
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {'checker': CardChecker(), 'logged_in': False}
     
-    welcome_text = """
+    welcome_text = f"""
 🔧 **CARD TESTING BOT**
 ━━━━━━━━━━━━━━━━━━━━
 
-👋 Welcome to the advanced card testing bot!
-
-**Commands:**
-/start - Start the bot
-/login - Login to portal
-/check - Start checking cards
-/dashboard - View dashboard
-/help - Get help
+👋 Welcome to the advanced card testing bot by {OWNER_NAME}!
 
 **Features:**
 ✅ Real-time card testing
@@ -427,134 +448,78 @@ def start_command(message):
 🌍 BIN information lookup
 📡 Live proxy support
 
-Ready to start? Use /login to begin!
+Use buttons below to navigate!
 """
     
-    bot.reply_to(message, welcome_text, parse_mode='Markdown')
+    bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=create_main_keyboard())
 
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    help_text = """
+@bot.callback_query_handler(func=lambda call: call.data.startswith('main_'))
+def main_callback(call):
+    user_id = call.from_user.id
+    data = call.data
+    
+    if data == 'main_login':
+        if user_id in user_sessions and user_sessions[user_id].get('logged_in'):
+            bot.answer_callback_query(call.id, "✅ Already logged in!")
+            return
+        msg = bot.send_message(user_id, "📧 Please enter your email:")
+        bot.register_next_step_handler(msg, get_email)
+    elif data == 'main_check':
+        if user_id not in user_sessions or not user_sessions[user_id].get('logged_in'):
+            bot.answer_callback_query(call.id, "❌ Login first!")
+            return
+        bot.send_message(user_id, """
+📝 **CARD INPUT**
+━━━━━━━━━━━━━━━━━━━━
+
+Send cards as text or upload a file (.txt) with format:
+`4100390600114058|11|2026|515`
+
+**Format:** Number|Month|Year|CVC
+""", parse_mode='Markdown')
+    elif data == 'main_dashboard':
+        dashboard_command(call.message)
+    elif data == 'main_help':
+        help_text = f"""
 🆘 **HELP CENTER**
 ━━━━━━━━━━━━━━━━━━━━
 
 **How to use:**
-1. Use /login with your credentials
-2. Use /check to start testing cards
-3. Use /dashboard to view results
+1. Login using button
+2. Check cards by sending text or file
+3. View dashboard for results
 
 **Card Format:**
 `4100390600114058|11|2026|515`
 
-**Multiple cards:** Send each card on a new line in one message
-**When done:** The bot will process the message as cards. Use /check again if needed.
-
-**Format:** Number|Month|Year|CVC
-
 **Dashboard Features:**
-• Real-time statistics
-• Filter by status (Approved/Declined/Errors)
-• View raw responses
-• Refresh data
-• Start new sessions
+• Statistics
+• Filter results
+• Stop checking
+• Download live cards
 
 **Support:**
-Contact admin if you need help!
+Contact {OWNER_USERNAME}
 """
     
-    bot.reply_to(message, help_text, parse_mode='Markdown')
+        bot.send_message(user_id, help_text, parse_mode='Markdown', reply_markup=create_main_keyboard())
+    elif data == 'main_back':
+        bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=create_main_keyboard())
 
-@bot.message_handler(commands=['login'])
-def login_command(message):
-    user_id = message.from_user.id
-    
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {'checker': CardChecker(), 'logged_in': False}
-    
-    msg = bot.reply_to(message, "📧 Please enter your email:")
-    bot.register_next_step_handler(msg, get_email)
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    bot.reply_to(message, "Use buttons for navigation!", reply_markup=create_main_keyboard())
 
-def get_email(message):
-    if message.text is None:
-        bot.reply_to(message, "❌ Please send text only.")
-        msg = bot.send_message(message.chat.id, "📧 Please enter your email:")
-        bot.register_next_step_handler(msg, get_email)
-        return
-    user_id = message.from_user.id
-    email = message.text.strip()
-    
-    user_sessions[user_id]['email'] = email
-    
-    msg = bot.reply_to(message, "🔑 Please enter your password:")
-    bot.register_next_step_handler(msg, get_password)
-
-def get_password(message):
-    if message.text is None:
-        bot.reply_to(message, "❌ Please send text only.")
-        msg = bot.send_message(message.chat.id, "🔑 Please enter your password:")
-        bot.register_next_step_handler(msg, get_password)
-        return
-    user_id = message.from_user.id
-    password = message.text.strip()
-    
-    # Delete the password message for security
-    try:
-        bot.delete_message(message.chat.id, message.message_id)
-    except:
-        pass
-    
-    email = user_sessions[user_id]['email']
-    checker = user_sessions[user_id]['checker']
-    
-    bot.send_message(user_id, "🔄 Logging in... Please wait.")
-    
-    if checker.login_to_portal(email, password):
-        if checker.send_google_ask():
-            user_sessions[user_id]['logged_in'] = True
-            bot.send_message(user_id, f"✅ Login successful!\n📧 Email: {email}\n\nUse /check to start testing cards.")
-        else:
-            bot.send_message(user_id, "❌ GoogleAsk failed. Please try again.")
-    else:
-        bot.send_message(user_id, "❌ Login failed. Please check your credentials and try again.")
-
-@bot.message_handler(commands=['check'])
-def check_command(message):
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
     user_id = message.from_user.id
     
     if user_id not in user_sessions or not user_sessions[user_id].get('logged_in'):
-        bot.reply_to(message, "❌ Please login first using /login")
-        return
-    
-    msg = bot.reply_to(message, """
-📝 **CARD INPUT**
-━━━━━━━━━━━━━━━━━━━━
-
-Please send your cards in this format (one message with new lines):
-`4100390600114058|11|2026|515`
-`5331870070218313|06|2030|391`
-
-**Format:** Number|Month|Year|CVC
-Send the message now.
-""", parse_mode='Markdown')
-    
-    bot.register_next_step_handler(msg, get_cards)
-
-def get_cards(message):
-    user_id = message.from_user.id
-    
-    if message.text is None:
-        bot.reply_to(message, "❌ Invalid input. Please send text message with cards.")
-        prompt_msg = bot.send_message(user_id, "Send cards now:")
-        bot.register_next_step_handler(prompt_msg, get_cards)
-        return
-    
-    text = message.text.strip()
-    if text.upper() == 'DONE':
-        bot.send_message(user_id, "❌ No cards received. Use /check and send cards.")
+        bot.reply_to(message, "❌ Login first using button!")
         return
     
     cards = []
-    lines = text.split('\n')
+    lines = message.text.strip().split('\n')
     
     for line in lines:
         line = line.strip()
@@ -562,19 +527,52 @@ def get_cards(message):
             cards.append(line)
     
     if not cards:
-        bot.reply_to(message, "❌ No valid cards found. Please send in correct format.")
-        prompt_msg = bot.send_message(user_id, "Send cards now:")
-        bot.register_next_step_handler(prompt_msg, get_cards)
+        bot.reply_to(message, "❌ No valid cards! Send in correct format.")
+        return
+    
+    process_cards(user_id, cards)
+
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    user_id = message.from_user.id
+    
+    if user_id not in user_sessions or not user_sessions[user_id].get('logged_in'):
+        bot.reply_to(message, "❌ Login first using button!")
+        return
+    
+    if message.document.file_name.endswith('.txt'):
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        cards = []
+        lines = downloaded_file.decode('utf-8').strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line and '|' in line:
+                cards.append(line)
+        
+        if not cards:
+            bot.reply_to(message, "❌ No valid cards in file!")
+            return
+        
+        process_cards(user_id, cards)
+    else:
+        bot.reply_to(message, "❌ Please upload .txt file!")
+
+def process_cards(user_id, cards):
+    if user_id in checking_threads and checking_threads[user_id].is_alive():
+        bot.send_message(user_id, "❌ Already checking! Stop current session first.")
         return
     
     # Initialize user results
     if user_id not in card_results:
         card_results[user_id] = {'approved': 0, 'declined': 0, 'errors': 0, 'total': 0, 'cards': []}
     
-    # Clear previous cards
     card_results[user_id]['cards'] = []
+    stop_flags[user_id] = False
     
-    # Send dashboard first
+    # Send dashboard
     dashboard_msg = bot.send_message(user_id, f"""
 📊 **TESTING DASHBOARD**
 ━━━━━━━━━━━━━━━━━━━━
@@ -591,26 +589,64 @@ def get_cards(message):
     
     user_sessions[user_id]['dashboard_msg_id'] = dashboard_msg.message_id
     
-    # Start checking cards in background
-    threading.Thread(target=check_cards_background, args=(user_id, cards), daemon=True).start()
+    # Start checking in background
+    thread = threading.Thread(target=check_cards_background, args=(user_id, cards), daemon=True)
+    checking_threads[user_id] = thread
+    thread.start()
+
+def get_email(message):
+    user_id = message.from_user.id
+    if message.text is None:
+        bot.reply_to(message, "❌ Text only!")
+        return
+    email = message.text.strip()
+    user_sessions[user_id]['email'] = email
+    
+    msg = bot.send_message(user_id, "🔑 Enter password:")
+    bot.register_next_step_handler(msg, get_password)
+
+def get_password(message):
+    user_id = message.from_user.id
+    if message.text is None:
+        bot.reply_to(message, "❌ Text only!")
+        return
+    password = message.text.strip()
+    
+    try:
+        bot.delete_message(message.chat.id, message.message_id)
+    except:
+        pass
+    
+    email = user_sessions[user_id]['email']
+    checker = user_sessions[user_id]['checker']
+    
+    bot.send_message(user_id, "🔄 Logging in...")
+    
+    if checker.login_to_portal(email, password):
+        if checker.send_google_ask():
+            user_sessions[user_id]['logged_in'] = True
+            bot.send_message(user_id, f"✅ Logged in! Email: {email}", reply_markup=create_main_keyboard())
+        else:
+            bot.send_message(user_id, "❌ GoogleAsk failed.")
+    else:
+        bot.send_message(user_id, "❌ Login failed.")
 
 def check_cards_background(user_id, cards):
-    """Check cards in background and update dashboard"""
-    if user_id not in user_sessions:
-        return
     checker = user_sessions[user_id]['checker']
     
     for i, card in enumerate(cards, 1):
+        if stop_flags.get(user_id, False):
+            bot.send_message(user_id, "🛑 Checking stopped!")
+            break
+        
         try:
             result = checker.test_card(card)
             
-            # Update statistics
             card_results[user_id]['total'] += 1
             card_results[user_id]['cards'].append(result)
             
             if result['status'] == 'Approved':
                 card_results[user_id]['approved'] += 1
-                # Send approved card as message
                 formatted_result = format_card_result(result, user_id)
                 bot.send_message(user_id, formatted_result)
                 
@@ -619,10 +655,8 @@ def check_cards_background(user_id, cards):
             else:
                 card_results[user_id]['errors'] += 1
             
-            # Update dashboard every card
             update_dashboard(user_id)
             
-            # Small delay between cards
             time.sleep(1)
             
         except Exception as e:
@@ -642,14 +676,12 @@ def check_cards_background(user_id, cards):
             update_dashboard(user_id)
             time.sleep(1)
     
-    # Final update
-    try:
-        bot.send_message(user_id, f"✨ Testing completed! {len(cards)} cards processed.")
-    except:
-        pass
+    if not stop_flags.get(user_id, False):
+        bot.send_message(user_id, f"✨ Testing completed! {len(cards)} cards processed.", reply_markup=create_dashboard_keyboard(user_id))
+    
+    stop_flags[user_id] = False
 
 def update_dashboard(user_id):
-    """Update dashboard message"""
     try:
         if user_id not in user_sessions or 'dashboard_msg_id' not in user_sessions[user_id]:
             return
@@ -660,16 +692,13 @@ def update_dashboard(user_id):
 📊 **TESTING DASHBOARD**
 ━━━━━━━━━━━━━━━━━━━━
 
-🔄 Testing in progress... ({stats['total']}/{len(card_results.get(user_id, {}).get('cards', []))} processed)
+🔄 Progress: {stats['total']}/{len(card_results.get(user_id, {}).get('cards', []))} 
 
 **Statistics:**
 💳 Total: {stats['total']}
 ✅ Approved: {stats['approved']}
 ❌ Declined: {stats['declined']}  
 ⚠️ Errors: {stats['errors']}
-
-**Status:**
-⏳ Processing... Please wait
 """
         
         bot.edit_message_text(
@@ -678,10 +707,9 @@ def update_dashboard(user_id):
             user_sessions[user_id]['dashboard_msg_id'],
             reply_markup=create_dashboard_keyboard(user_id)
         )
-    except Exception as e:
-        pass  # Ignore edit errors
+    except:
+        pass
 
-@bot.message_handler(commands=['dashboard'])
 def dashboard_command(message):
     user_id = message.from_user.id
     
@@ -699,14 +727,10 @@ def dashboard_command(message):
 ✅ Approved: {stats['approved']}
 ❌ Declined: {stats['declined']}
 ⚠️ Errors: {stats['errors']}
-
-**Actions:**
-Click buttons to view card lists.
 """
     
     msg = bot.send_message(user_id, dashboard_text, reply_markup=create_dashboard_keyboard(user_id))
-    if user_id in user_sessions:
-        user_sessions[user_id]['dashboard_msg_id'] = msg.message_id
+    user_sessions[user_id]['dashboard_msg_id'] = msg.message_id
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
@@ -724,23 +748,43 @@ def callback_handler(call):
     elif data.startswith('show_responses_'):
         show_filtered_results(user_id, 'All', call.message.message_id, show_response=True)
     elif data.startswith('refresh_dashboard_'):
-        if user_id in user_sessions and 'dashboard_msg_id' in user_sessions[user_id]:
-            update_dashboard(user_id)
+        update_dashboard(user_id)
         bot.answer_callback_query(call.id, "🔄 Refreshed!")
     elif data.startswith('new_session_'):
         if user_id in user_sessions:
-            del user_sessions[user_id]
+            user_sessions[user_id] = {'checker': CardChecker(), 'logged_in': False}
         if user_id in card_results:
-            del card_results[user_id]
-        bot.answer_callback_query(call.id, "🆕 Reset!")
-        bot.send_message(user_id, "🆕 New session. Use /login.")
+            card_results[user_id] = {'approved': 0, 'declined': 0, 'errors': 0, 'total': 0, 'cards': []}
+        if user_id in stop_flags:
+            stop_flags[user_id] = True
+        bot.answer_callback_query(call.id, "🆕 New session started!")
+        bot.send_message(user_id, "🆕 New session! Login again.", reply_markup=create_main_keyboard())
     elif data.startswith('back_to_dashboard_'):
-        if user_id in user_sessions and 'dashboard_msg_id' in user_sessions[user_id]:
-            update_dashboard(user_id)
+        update_dashboard(user_id)
         bot.answer_callback_query(call.id, "🔙 Back!")
+    elif data.startswith('stop_checking_'):
+        if user_id in checking_threads and checking_threads[user_id].is_alive():
+            stop_flags[user_id] = True
+            bot.answer_callback_query(call.id, "🛑 Stopping...")
+        else:
+            bot.answer_callback_query(call.id, "No checking in progress!")
+    elif data.startswith('download_live_'):
+        live_cards = [result['card'] for result in card_results.get(user_id, {}).get('cards', []) if result['status'] == 'Approved']
+        if not live_cards:
+            bot.answer_callback_query(call.id, "No live cards!")
+            return
+        
+        file_path = f"live_cards_{user_id}.txt"
+        with open(file_path, 'w') as f:
+            f.write('\n'.join(live_cards))
+        
+        with open(file_path, 'rb') as f:
+            bot.send_document(user_id, f, caption="✅ Live Cards TXT")
+        
+        os.remove(file_path)
+        bot.answer_callback_query(call.id, "📄 Downloaded!")
 
 def show_filtered_results(user_id, status_filter, message_id, show_response=False):
-    """Show filtered results"""
     if user_id not in card_results or not card_results[user_id].get('cards'):
         bot.edit_message_text(
             "❌ No cards.",
@@ -770,7 +814,7 @@ def show_filtered_results(user_id, status_filter, message_id, show_response=Fals
         return
     
     text = f"📋 **{title}**\n━━━━━━━━━━━━━━━━━━━━\n\n"
-    for result in filtered_cards[-10:]:  # Limit to last 10 to avoid message too long
+    for result in filtered_cards[-10:]:
         if result['bin_info'] is None:
             result['bin_info'] = {'scheme': 'UNKNOWN', 'type': 'UNKNOWN', 'brand': 'UNKNOWN', 'bank': 'Unknown', 'country': 'Unknown', 'country_emoji': '🌍', 'category': 'UNKNOWN'}
         text += format_card_result(result, user_id)
@@ -790,7 +834,7 @@ def show_filtered_results(user_id, status_filter, message_id, show_response=Fals
             parse_mode='Markdown'
         )
     except:
-        bot.send_message(user_id, "⚠️ Too many results. Check stats.")
+        bot.send_message(user_id, "⚠️ Too many results.")
 
 if __name__ == '__main__':
     print("Bot starting...")
