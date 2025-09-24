@@ -681,31 +681,31 @@ def format_card_result(result: CardResult, user_id: int) -> str:
 [🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME}
 """
     return message.strip()
-    @staticmethod
-    def format_dashboard(user_id: int, total_cards: int = 0) -> str:
-        """Format dashboard with enhanced statistics"""
-        results = session_manager.get_results(user_id)
-        session = session_manager.get_session(user_id)
-        
-        # Calculate progress
-        progress = results['total']
-        percentage = (progress / total_cards * 100) if total_cards > 0 else 0
-        
-        # Calculate rates
-        success_rate = (results['approved'] / results['total'] * 100) if results['total'] > 0 else 0
-        
-        # Time calculations
-        elapsed_time = 0
-        if results.get('start_time'):
-            elapsed_time = time.time() - results['start_time']
-        
-        cards_per_minute = (results['total'] / (elapsed_time / 60)) if elapsed_time > 0 else 0
-        
-        # Progress bar
-        progress_filled = int(percentage / 10)
-        progress_bar = "█" * progress_filled + "░" * (10 - progress_filled)
-        
-        dashboard = f"""
+@staticmethod
+def format_dashboard(user_id: int, total_cards: int = 0) -> str:
+    """Format dashboard with enhanced statistics"""
+    results = session_manager.get_results(user_id)
+    session = session_manager.get_session(user_id)
+    
+    # Calculate progress
+    progress = results['total']
+    percentage = (progress / total_cards * 100) if total_cards > 0 else 0
+    
+    # Calculate rates
+    success_rate = (results['approved'] / results['total'] * 100) if results['total'] > 0 else 0
+    
+    # Time calculations
+    elapsed_time = 0
+    if results.get('start_time'):
+        elapsed_time = time.time() - results['start_time']
+    
+    cards_per_minute = (results['total'] / (elapsed_time / 60)) if elapsed_time > 0 else 0
+    
+    # Progress bar
+    progress_filled = int(percentage / 10)
+    progress_bar = "█" * progress_filled + "░" * (10 - progress_filled)
+    
+    dashboard = f"""
 ╭─────────────────────────╮
 │     📊 **DASHBOARD**     │  
 ╰─────────────────────────╯
@@ -728,8 +728,8 @@ def format_card_result(result: CardResult, user_id: int) -> str:
 📧 **Session Info:**
 └ 🔐 **Account:** {session.get('email', 'Not logged in')}
 """
-        
-        return dashboard.strip()
+    
+    return dashboard.strip()
 
 class KeyboardManager:
     """Enhanced keyboard management"""
