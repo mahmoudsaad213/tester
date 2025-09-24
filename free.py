@@ -648,50 +648,39 @@ bot = telebot.TeleBot(BOT_TOKEN)
 class MessageFormatter:
     """Enhanced message formatting"""
     
-    @staticmethod
-    def format_card_result(result: CardResult, user_id: int) -> str:
-        """Format card result with enhanced styling"""
-        bin_info = result.bin_info
-        
-        # Status emoji and text
-        if result.status == 'Approved':
-            status_emoji = "✅"
-            status_text = "APPROVED"
-            status_style = "🟢"
-        elif result.status == 'Declined':
-            status_emoji = "❌" 
-            status_text = "DECLINED"
-            status_style = "🔴"
-        else:
-            status_emoji = "⚠️"
-            status_text = result.status.upper()
-            status_style = "🟡"
-        
-        message = f"""
-╭─────────────────────────╮
-│  💳 𝗖𝗮𝗿𝗱 𝗖𝗵𝗲𝗰𝗸 𝗥𝗲𝘀𝘂𝗹𝘁  │
-╰─────────────────────────╯
-
-🔢 **Card:** `{result.card}`
-
-{status_style} **Status:** {status_emoji} **{status_text}**
-💬 **Message:** `{result.message}`
-
-┌─ 📊 **BIN Information** ─┐
-├ 🏷️ **Scheme:** {bin_info.scheme}
-├ 💳 **Type:** {bin_info.type}  
-├ 🏪 **Brand:** {bin_info.brand}
-├ 🏦 **Bank:** {bin_info.bank}
-├ {bin_info.country_emoji} **Country:** {bin_info.country}
-└ 📋 **Category:** {bin_info.category}
-
-╭─────────────────────────╮
-│ ⚡ **Checked by:** @{bot.get_me().username}
-│ 👑 **Owner:** {OWNER_NAME}
-╰─────────────────────────╯
-"""
-        return message.strip()
+@staticmethod
+def format_card_result(result: CardResult, user_id: int) -> str:
+    bin_info = result.bin_info
     
+    # Status emoji and text
+    if result.status == 'Approved':
+        status_emoji = "✅"
+        status_text = "Live"
+    elif result.status == 'Declined':
+        status_emoji = "❌"
+        status_text = "Declined"
+    else:
+        status_emoji = "⚠️"
+        status_text = result.status
+    
+    message = f"""
+[💳] 𝙲𝚊𝚛𝚍 ↯ {result.card}
+-----------------------------
+[{status_emoji}] 𝚂𝚝𝚊𝚝𝚞𝚜 ↯ [{status_text}]
+[🎟️] 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 ↯- [{result.message}]
+-----------------------------
+[📟] 𝚋𝚒𝚗 ↯ {bin_info.scheme} - {bin_info.type} - {bin_info.brand}
+[🏦] 𝚋𝚊𝚗𝚔 ↯ {bin_info.bank}
+[{bin_info.country_emoji}] 𝚌𝚘𝚞𝚗𝚝𝚛𝚢 ↯ {bin_info.country} [{bin_info.country_emoji}]
+-----------------------------
+[🤓] 𝙶𝚊𝚝𝚎𝚠𝚊𝚢 ↯ Budget VM Stripe
+[🕜] 𝚃𝚊𝚔𝚎𝚗 ↯ [ {result.time_taken}s ] || 𝚁𝚎𝚝𝚛𝚢 ↯- 0
+[📡] 𝙿𝚛𝚘𝚡𝚸 ↯- LIVE ✅ (54.xxx.16)
+-----------------------------
+[❤️]𝙲𝚑𝚎𝚌𝚔𝚎𝚍 𝙱𝚢 ↯ @{bot.get_me().username} [FREE]
+[🥷] ミ★ 𝘖𝘸𝘯𝘦𝘳 ★彡 ↯ - {OWNER_NAME}
+"""
+    return message.strip()
     @staticmethod
     def format_dashboard(user_id: int, total_cards: int = 0) -> str:
         """Format dashboard with enhanced statistics"""
